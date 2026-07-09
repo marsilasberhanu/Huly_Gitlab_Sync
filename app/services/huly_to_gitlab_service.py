@@ -16,8 +16,7 @@ except ModuleNotFoundError:
 try:
     from app.models.issue_mapping import IssueMapping
 except ModuleNotFoundError:
-    from app.models import IssueMapping
-
+    from app.models.issue_mapping import IssueMapping
 
 # =========================
 # Environment

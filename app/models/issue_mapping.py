@@ -12,7 +12,7 @@ from app.database import Base
 
 
 class IssueMapping(Base):
-    __tablename__ = "issue_mappings"
+    __tablename__ = "issue_mapping"
 
     id = Column(Integer, primary_key=True, index=True)
 
