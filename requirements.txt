@@ -6,3 +6,4 @@ sqlalchemy
 celery
 redis
 psycopg2-binary
+alembic
