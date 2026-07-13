@@ -20,4 +20,14 @@ Base = declarative_base()
 
 def init_db():
     import app.models.issue_mapping  # noqa: F401
+    import app.models.user  # noqa: F401
+
     Base.metadata.create_all(bind=engine)
+
+def get_db():
+    db = SessionLocal()
+
+    try:
+        yield db
+    finally:
+        db.close()

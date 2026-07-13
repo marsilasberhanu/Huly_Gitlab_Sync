@@ -13,6 +13,7 @@ from app.database import init_db, SessionLocal
 from app.models.issue_mapping import IssueMapping
 from app.services.huly_polling_service import HulyPollingService
 from app.services.huly_to_gitlab_service import sync_huly_issue_to_gitlab
+from app.routers import auth
 
 huly_polling_service: HulyPollingService | None = None
 
@@ -478,6 +479,7 @@ async def debug_poller():
 #             print(f"🔴 Polling Engine Error: {e}")
 
 #         await asyncio.sleep(10)
+app.include_router(auth.router)
 
 
 if __name__ == "__main__":
