@@ -13,6 +13,8 @@ from app.routers import (
     polling,
 )
 from app.services.huly_polling_service import HulyPollingService
+from app.services.huly_to_gitlab_service import sync_huly_issue_to_gitlab
+from app.routers import auth
 
 
 APP_ENV = os.getenv(
