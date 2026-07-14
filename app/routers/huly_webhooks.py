@@ -15,9 +15,6 @@ router = APIRouter(
 async def huly_webhook(request: Request):
     payload = await request.json()
 
-    print("📩 Huly webhook/event received")
-    print(payload)
-
     event_type = (
         payload.get("eventType")
         or payload.get("event_type")

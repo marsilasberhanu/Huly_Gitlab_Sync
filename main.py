@@ -16,6 +16,12 @@ from app.routers import (
 from app.services.huly_polling_service import HulyPollingService
 
 
+APP_ENV = os.getenv(
+    "APP_ENV",
+    "development",
+).lower()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("🚀 FastAPI lifespan startup running", flush=True)
@@ -107,10 +113,10 @@ app.include_router(auth.router)
 app.include_router(general.router)
 app.include_router(mappings.router)
 app.include_router(polling.router)
-app.include_router(debug.router)
 app.include_router(huly_webhooks.router)
 app.include_router(gitlab_webhooks.router)
-
+if APP_ENV != "production":
+    app.include_router(debug.router)
 
 if __name__ == "__main__":
     import uvicorn

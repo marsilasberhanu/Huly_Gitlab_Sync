@@ -1,7 +1,6 @@
 import os
 import asyncio
-from datetime import datetime
-
+from datetime import datetime, timezone
 from app.clients.huly_adapter_client import HulyAdapterClient
 from app.services.huly_to_gitlab_service import sync_huly_issue_to_gitlab
 
@@ -20,6 +19,7 @@ class HulyPollingService:
         # First poll only records existing Huly issues.
         # It does NOT sync them again.
         self.initialized = False
+        self._poll_lock = asyncio.Lock()
 
         print("HulyPollingService env debug:")
         print("HULY_PROJECT_ID =", self.project_id)
@@ -27,6 +27,17 @@ class HulyPollingService:
         print("HULY_POLL_INTERVAL_SECONDS =", self.interval)
 
     async def poll_once(self):
+        if self._poll_lock.locked():
+            return {
+                "success": False,
+                "status": "already_running",
+                "message": "A Huly polling operation is already running.",
+            }
+
+        async with self._poll_lock:
+            return await self._poll_once_unlocked()
+
+    async def _poll_once_unlocked(self):
         if not self.project_id:
             return {
                 "success": False,
@@ -65,7 +76,7 @@ class HulyPollingService:
 
             return {
                 "success": True,
-                "checked_at": datetime.utcnow().isoformat(),
+                "checked_at": datetime.now(timezone.utc).isoformat(),
                 "mode": "initial_snapshot",
                 "message": "Initial Huly state loaded. No sync triggered.",
                 "known_issues_count": len(self.known_issues),
@@ -147,7 +158,7 @@ class HulyPollingService:
 
         return {
             "success": True,
-            "checked_at": datetime.utcnow().isoformat(),
+            "checked_at": datetime.now(timezone.utc).isoformat(),
             "mode": "normal_poll",
             "changes_count": len(changes),
             "changes": changes,
@@ -155,12 +166,20 @@ class HulyPollingService:
         }
 
     async def start_polling(self):
-        print(f"Starting Huly polling every {self.interval} seconds")
+        print(
+            f"Starting Huly polling every {self.interval} seconds"
+        )
 
         while True:
             try:
                 await self.poll_once()
-            except Exception as e:
-                print(f"Huly polling error: {e}")
+                await asyncio.sleep(self.interval)
 
-            await asyncio.sleep(self.interval)
+            except asyncio.CancelledError:
+                print("Huly polling loop cancelled")
+                raise
+
+            except Exception as exc:
+                print(f"Huly polling error: {exc}")
+
+                await asyncio.sleep(self.interval)
