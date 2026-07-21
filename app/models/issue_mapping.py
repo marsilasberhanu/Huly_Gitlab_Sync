@@ -38,7 +38,7 @@ class IssueMapping(Base):
     __table_args__ = (
         UniqueConstraint(
             "gitlab_project_id",
-            "gitlab_issue_id",
+            "gitlab_issue_id", 
             name="uq_gitlab_issue_mapping",
         ),
     )
