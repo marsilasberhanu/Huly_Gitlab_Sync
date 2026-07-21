@@ -8,7 +8,7 @@ class HulyClient:
         self.adapter_url = os.getenv("HULY_ADAPTER_URL", "http://huly-adapter:3001")
         self.project_id = os.getenv(
             "HULY_DEFAULT_PROJECT_ID",
-            "6a44daeb397fc37bf8011aaf"
+            "6a5f3a1ae71459b02a3521f7"
         )
 
     async def check_for_updates(self, last_sync_timestamp: str):
