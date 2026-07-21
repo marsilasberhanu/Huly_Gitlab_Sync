@@ -6,7 +6,7 @@ def test_run():
     client = HulyClient()
     
     # Replace with your actual Huly project identifier
-    project_id = "6a44daeb397fc37bf8011aaf" 
+    project_id = "6a5f3a1ae71459b02a3521f7" 
 
     try:
         new_issue = client.create_issue(

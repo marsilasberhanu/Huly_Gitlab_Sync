@@ -88,7 +88,7 @@ HULY_ADAPTER_URL = os.getenv("HULY_ADAPTER_URL", "http://huly-adapter:3001")
 
 HULY_DEFAULT_PROJECT_ID = os.getenv(
     "HULY_DEFAULT_PROJECT_ID",
-    "6a44daeb397fc37bf8011aaf"
+    "6a5f3a1ae71459b02a3521f7"
 )
 
 
