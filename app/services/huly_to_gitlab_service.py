@@ -1,29 +1,18 @@
 import os
+
 import httpx
 
+from app.database import SessionLocal
+from app.models.issue_mapping import IssueMapping
+from app.services.mapping_service import find_mapping_by_huly
 
-# =========================
-# Database imports
-# =========================
-# Adjust ONLY these imports if your actual filenames are different.
-
-try:
-    from app.database import SessionLocal
-except ModuleNotFoundError:
-    from app.db.database import SessionLocal
-
-
-try:
-    from app.models.issue_mapping import IssueMapping
-except ModuleNotFoundError:
-    from app.models.issue_mapping import IssueMapping
-
-# =========================
-# Environment
-# =========================
 
 GITLAB_API_TOKEN = os.getenv("GITLAB_API_TOKEN")
-GITLAB_BASE_URL = os.getenv("GITLAB_BASE_URL", "https://gitlab.com/api/v4")
+
+GITLAB_BASE_URL = os.getenv(
+    "GITLAB_BASE_URL",
+    "https://gitlab.com/api/v4",
+)
 
 GITLAB_DEFAULT_PROJECT_ID = (
     os.getenv("GITLAB_DEFAULT_PROJECT_ID")
@@ -33,41 +22,33 @@ GITLAB_DEFAULT_PROJECT_ID = (
 
 
 def normalize_gitlab_base_url(url: str) -> str:
-    url = url.rstrip("/")
+    normalized_url = url.rstrip("/")
 
-    if url.endswith("/api/v4"):
-        return url
+    if normalized_url.endswith("/api/v4"):
+        return normalized_url
 
-    return f"{url}/api/v4"
-
-
-GITLAB_BASE_URL = normalize_gitlab_base_url(GITLAB_BASE_URL)
+    return f"{normalized_url}/api/v4"
 
 
-# =========================
-# Mapping helpers
-# =========================
-
-def find_mapping_by_huly(db, huly_project_id: str, huly_issue_id: str):
-    return (
-        db.query(IssueMapping)
-        .filter(
-            IssueMapping.huly_project_id == str(huly_project_id),
-            IssueMapping.huly_issue_id == str(huly_issue_id),
-        )
-        .first()
-    )
+GITLAB_BASE_URL = normalize_gitlab_base_url(
+    GITLAB_BASE_URL
+)
 
 
-# =========================
-# GitLab helpers
-# =========================
-
-async def create_gitlab_issue(project_id: int | str, title: str, description: str) -> dict:
+async def create_gitlab_issue(
+    project_id: int | str,
+    title: str,
+    description: str,
+) -> dict:
     if not GITLAB_API_TOKEN:
-        raise RuntimeError("GITLAB_API_TOKEN is not set")
+        raise RuntimeError(
+            "GITLAB_API_TOKEN is not configured"
+        )
 
-    url = f"{GITLAB_BASE_URL}/projects/{project_id}/issues"
+    url = (
+        f"{GITLAB_BASE_URL}/projects/"
+        f"{project_id}/issues"
+    )
 
     headers = {
         "PRIVATE-TOKEN": GITLAB_API_TOKEN,
@@ -80,27 +61,29 @@ async def create_gitlab_issue(project_id: int | str, title: str, description: st
     }
 
     async with httpx.AsyncClient(timeout=30) as client:
-        response = await client.post(url, json=payload, headers=headers)
+        response = await client.post(
+            url,
+            json=payload,
+            headers=headers,
+        )
 
-        if response.status_code >= 400:
-            raise RuntimeError(
-                f"GitLab create issue failed: "
-                f"{response.status_code} {response.text}"
-            )
+    if response.status_code >= 400:
+        raise RuntimeError(
+            "GitLab create issue failed: "
+            f"{response.status_code} {response.text}"
+        )
 
-        return response.json()
+    return response.json()
 
-
-# =========================
-# Main Huly → GitLab sync
-# =========================
 
 async def sync_huly_issue_to_gitlab(
     issue: dict,
     event_type: str = "issue.created",
     source: str = "unknown",
-):
-    print(f"🔁 Huly → GitLab sync triggered from: {source}")
+) -> dict:
+    print(
+        f"🔁 Huly → GitLab sync triggered from: {source}"
+    )
     print(f"Huly event type: {event_type}")
 
     huly_project_id = (
@@ -116,26 +99,50 @@ async def sync_huly_issue_to_gitlab(
     )
 
     huly_identifier = issue.get("identifier")
-    huly_title = issue.get("title") or "Untitled Huly issue"
-    huly_description = issue.get("description") or "No description provided."
+
+    huly_title = (
+        issue.get("title")
+        or "Untitled Huly issue"
+    )
+
+    huly_description = (
+        issue.get("description")
+        or "No description provided."
+    )
+
     huly_url = issue.get("url", "")
 
-    if event_type not in ["issue.created", "create", "created"]:
+    supported_events = {
+        "issue.created",
+        "create",
+        "created",
+    }
+
+    if event_type not in supported_events:
         return {
             "status": "ignored",
-            "reason": f"Huly event not handled yet: {event_type}",
+            "reason": (
+                "Huly event not handled yet: "
+                f"{event_type}"
+            ),
         }
 
     if not GITLAB_DEFAULT_PROJECT_ID:
         return {
             "status": "failed",
-            "reason": "GITLAB_DEFAULT_PROJECT_ID or GITLAB_PROJECT_ID is not set",
+            "reason": (
+                "GITLAB_DEFAULT_PROJECT_ID or "
+                "GITLAB_PROJECT_ID is not configured"
+            ),
         }
 
     if not huly_project_id or not huly_issue_id:
         return {
             "status": "failed",
-            "reason": "Missing Huly project ID or Huly issue ID",
+            "reason": (
+                "Missing Huly project ID "
+                "or Huly issue ID"
+            ),
             "issue": issue,
         }
 
@@ -149,20 +156,38 @@ async def sync_huly_issue_to_gitlab(
         )
 
         if existing_mapping:
-            print("🟡 Huly issue is already mapped. Not creating duplicate GitLab issue.")
+            print(
+                "🟡 Huly issue is already mapped. "
+                "Not creating a duplicate GitLab issue."
+            )
 
             return {
                 "status": "already_synced",
-                "message": "This Huly issue is already mapped to a GitLab issue.",
+                "message": (
+                    "This Huly issue is already mapped "
+                    "to a GitLab issue."
+                ),
                 "huly": {
-                    "project_id": existing_mapping.huly_project_id,
-                    "issue_id": existing_mapping.huly_issue_id,
-                    "identifier": existing_mapping.huly_identifier,
+                    "project_id": (
+                        existing_mapping.huly_project_id
+                    ),
+                    "issue_id": (
+                        existing_mapping.huly_issue_id
+                    ),
+                    "identifier": (
+                        existing_mapping.huly_identifier
+                    ),
                 },
                 "gitlab": {
-                    "project_id": existing_mapping.gitlab_project_id,
-                    "issue_id": existing_mapping.gitlab_issue_id,
-                    "issue_iid": existing_mapping.gitlab_issue_iid,
+                    "project_id": (
+                        existing_mapping.gitlab_project_id
+                    ),
+                    "issue_id": (
+                        existing_mapping.gitlab_issue_id
+                    ),
+                    "issue_iid": (
+                        existing_mapping.gitlab_issue_iid
+                    ),
                 },
             }
 
@@ -178,7 +203,9 @@ Original Huly Description:
 {huly_description}
 """
 
-        print("🚀 Creating GitLab issue from Huly issue...")
+        print(
+            "🚀 Creating GitLab issue from Huly issue..."
+        )
 
         gitlab_result = await create_gitlab_issue(
             project_id=GITLAB_DEFAULT_PROJECT_ID,
@@ -189,7 +216,11 @@ Original Huly Description:
         print("✅ GitLab issue created")
         print(gitlab_result)
 
-        gitlab_project_id = gitlab_result.get("project_id") or int(GITLAB_DEFAULT_PROJECT_ID)
+        gitlab_project_id = (
+            gitlab_result.get("project_id")
+            or int(GITLAB_DEFAULT_PROJECT_ID)
+        )
+
         gitlab_issue_id = gitlab_result.get("id")
         gitlab_issue_iid = gitlab_result.get("iid")
         gitlab_issue_url = gitlab_result.get("web_url")
@@ -197,7 +228,10 @@ Original Huly Description:
         if not gitlab_issue_id:
             return {
                 "status": "failed",
-                "reason": "GitLab issue was created but response did not include id.",
+                "reason": (
+                    "GitLab issue was created but "
+                    "the response did not include id."
+                ),
                 "gitlab_response": gitlab_result,
             }
 
@@ -208,7 +242,6 @@ Original Huly Description:
             gitlab_issue_iid=gitlab_issue_iid,
             gitlab_issue_url=gitlab_issue_url,
             gitlab_title=huly_title,
-
             huly_project_id=str(huly_project_id),
             huly_issue_id=str(huly_issue_id),
             huly_identifier=huly_identifier,
@@ -219,11 +252,17 @@ Original Huly Description:
         db.refresh(mapping)
 
         print("✅ Huly → GitLab mapping saved")
-        print(f"Huly Issue {huly_issue_id} → GitLab Issue {gitlab_issue_id}")
+        print(
+            f"Huly Issue {huly_issue_id} "
+            f"→ GitLab Issue {gitlab_issue_id}"
+        )
 
         return {
             "status": "synced_to_gitlab",
-            "message": "Huly issue created in GitLab and mapping saved.",
+            "message": (
+                "Huly issue created in GitLab "
+                "and mapping saved."
+            ),
             "mapping": {
                 "huly_project_id": huly_project_id,
                 "huly_issue_id": huly_issue_id,
@@ -235,14 +274,16 @@ Original Huly Description:
             "gitlab": gitlab_result,
         }
 
-    except Exception as e:
+    except Exception as exc:
         db.rollback()
 
-        print(f"🔴 Error during Huly → GitLab sync: {e}")
+        print(
+            f"🔴 Error during Huly → GitLab sync: {exc}"
+        )
 
         return {
             "status": "error",
-            "message": str(e),
+            "message": str(exc),
         }
 
     finally:
