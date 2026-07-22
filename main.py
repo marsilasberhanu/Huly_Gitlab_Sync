@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.routers import (
+    auth,
     debug,
     general,
     gitlab_webhooks,
@@ -109,7 +110,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-
+app.include_router(auth.router)
 app.include_router(general.router)
 app.include_router(mappings.router)
 app.include_router(polling.router)
