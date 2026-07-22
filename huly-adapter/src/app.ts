@@ -1,7 +1,7 @@
 import express from "express";
-import issueRoutes from "./routes/issues";
-import projectRoutes from "./routes/projects";
-import metadataRoutes from "./routes/metadata";
+import issueRoutes from "./routes/issues.js";
+import projectRoutes from "./routes/projects.js";
+import metadataRoutes from "./routes/metadata.js";
 
 const app = express();
 

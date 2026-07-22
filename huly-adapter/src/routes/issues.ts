@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { createIssue } from "../services/huly.service";
-import { listIssues } from "../services/huly.list.service";
+import { createIssue } from "../services/huly.service.js";
+import { listIssues } from "../services/huly.list.service.js";
 
 const router = Router();
 

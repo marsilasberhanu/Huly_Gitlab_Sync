@@ -1,6 +1,6 @@
 import { Router } from "express";
 import taskRaw from "@hcengineering/task";
-import { getHulyRestClient, closeClient } from "../services/huly.client";
+import { getHulyRestClient, closeClient } from "../services/huly.client.js";
 
 const task = (taskRaw as any).default ?? taskRaw;
 

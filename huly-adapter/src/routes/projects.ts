@@ -1,6 +1,6 @@
 import { Router } from "express";
 import trackerRaw from "@hcengineering/tracker";
-import { getHulyRestClient, closeClient } from "../services/huly.client";
+import { getHulyRestClient, closeClient } from "../services/huly.client.js";
 
 const tracker = (trackerRaw as any).default ?? trackerRaw;
 

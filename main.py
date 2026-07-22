@@ -6,6 +6,7 @@ from fastapi import FastAPI
 
 from app.routers import (
     auth,
+    connections,
     debug,
     general,
     gitlab_webhooks,
@@ -13,6 +14,7 @@ from app.routers import (
     mappings,
     polling,
 )
+
 from app.services.huly_polling_service import HulyPollingService
 from app.services.huly_to_gitlab_service import sync_huly_issue_to_gitlab
 from app.routers import auth
@@ -111,6 +113,7 @@ app = FastAPI(
 )
 
 app.include_router(auth.router)
+app.include_router(connections.router)
 app.include_router(general.router)
 app.include_router(mappings.router)
 app.include_router(polling.router)

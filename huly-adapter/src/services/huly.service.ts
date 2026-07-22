@@ -2,7 +2,7 @@ import crypto from "crypto";
 import apiClientRaw from "@hcengineering/api-client";
 import trackerRaw from "@hcengineering/tracker";
 import taskRaw from "@hcengineering/task";
-import { CreateIssueRequest } from "../types/issue";
+import { CreateIssueRequest } from "../types/issue.js";
 
 const apiClient = (apiClientRaw as any).default ?? apiClientRaw;
 const tracker = (trackerRaw as any).default ?? trackerRaw;
