@@ -1,13 +1,15 @@
 from sqlalchemy import (
-    Column,
-    Integer,
     BigInteger,
+    Column,
+    DateTime,
+    ForeignKey,
+    Integer,
     String,
     Text,
-    DateTime,
     UniqueConstraint,
     func,
 )
+
 from app.database import Base
 
 
@@ -15,6 +17,21 @@ class IssueMapping(Base):
     __tablename__ = "issue_mapping"
 
     id = Column(Integer, primary_key=True, index=True)
+
+    # Nullable temporarily so old development mappings survive migration.
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+
+    project_link_id = Column(
+        Integer,
+        ForeignKey("project_links.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
 
     gitlab_project_id = Column(BigInteger, nullable=False)
     gitlab_project_name = Column(String, nullable=True)
@@ -28,7 +45,10 @@ class IssueMapping(Base):
     huly_issue_id = Column(String, nullable=False)
     huly_identifier = Column(String, nullable=True)
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )
     updated_at = Column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -37,8 +57,13 @@ class IssueMapping(Base):
 
     __table_args__ = (
         UniqueConstraint(
-            "gitlab_project_id",
-            "gitlab_issue_id", 
-            name="uq_gitlab_issue_mapping",
+            "project_link_id",
+            "gitlab_issue_id",
+            name="uq_project_link_gitlab_issue",
+        ),
+        UniqueConstraint(
+            "project_link_id",
+            "huly_issue_id",
+            name="uq_project_link_huly_issue",
         ),
     )

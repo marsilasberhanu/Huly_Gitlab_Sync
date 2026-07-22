@@ -1,16 +1,22 @@
 import crypto from "crypto";
+
 import apiClientRaw from "@hcengineering/api-client";
 import trackerRaw from "@hcengineering/tracker";
 import taskRaw from "@hcengineering/task";
+
+import type { HulyConnectionConfig } from "./huly.client.js";
 import { CreateIssueRequest } from "../types/issue.js";
+
 
 const apiClient = (apiClientRaw as any).default ?? apiClientRaw;
 const tracker = (trackerRaw as any).default ?? trackerRaw;
 const task = (taskRaw as any).default ?? taskRaw;
 
+
 function generateHulyId(): string {
   return crypto.randomBytes(12).toString("hex");
 }
+
 
 function getEnv(name: string): string {
   const value = process.env[name];
@@ -22,21 +28,36 @@ function getEnv(name: string): string {
   return value;
 }
 
-async function getClient() {
-  const url = process.env.HULY_URL || "https://huly.app";
+
+async function getClient(
+  connection?: HulyConnectionConfig
+) {
+  const url =
+    connection?.url ??
+    process.env.HULY_URL ??
+    "https://huly.app";
+
+  const token =
+    connection?.token ??
+    getEnv("HULY_TOKEN");
+
+  const workspace =
+    connection?.workspace ??
+    getEnv("HULY_WORKSPACE_ID");
 
   const options: any = {
-    token: getEnv("HULY_TOKEN"),
-    workspace: getEnv("HULY_WORKSPACE_ID"),
+    token,
+    workspace,
 
     websocketFactory: apiClient.NodeWebSocketFactory,
     webSocketFactory: apiClient.NodeWebSocketFactory,
     wsFactory: apiClient.NodeWebSocketFactory,
-    factory: apiClient.NodeWebSocketFactory
+    factory: apiClient.NodeWebSocketFactory,
   };
 
   return await apiClient.connect(url, options);
 }
+
 
 async function closeClient(client: any) {
   if (typeof client.close === "function") {
@@ -44,36 +65,49 @@ async function closeClient(client: any) {
   }
 }
 
-export async function createIssue(payload: CreateIssueRequest) {
+
+export async function createIssue(
+  payload: CreateIssueRequest,
+  connection?: HulyConnectionConfig
+) {
   if (!payload.title?.trim()) {
     throw new Error("title is required");
   }
 
-  const client: any = await getClient();
+  const client: any = await getClient(connection);
 
   try {
-    const projectId = payload.projectId || getEnv("HULY_PROJECT_ID");
+    const projectId =
+      payload.projectId ??
+      getEnv("HULY_PROJECT_ID");
 
-    const project = await client.findOne(tracker.class.Project, {
-      _id: projectId
-    });
+    const project = await client.findOne(
+      tracker.class.Project,
+      {
+        _id: projectId,
+      }
+    );
 
     if (!project) {
       throw new Error(`Project not found: ${projectId}`);
     }
 
-    const issueTypeName = payload.issueType || "Issue";
+    const issueTypeName = payload.issueType ?? "Issue";
 
-    const issueType = await client.findOne(task.class.TaskType, {
-      name: issueTypeName
-    });
+    const issueType = await client.findOne(
+      task.class.TaskType,
+      {
+        name: issueTypeName,
+      }
+    );
 
     if (!issueType) {
-      throw new Error(`Issue type not found: ${issueTypeName}`);
+      throw new Error(
+        `Issue type not found: ${issueTypeName}`
+      );
     }
 
     const issueId = generateHulyId();
-
     const number = (project.sequence ?? 0) + 1;
     const identifier = `${project.identifier}-${number}`;
 
@@ -89,7 +123,11 @@ export async function createIssue(payload: CreateIssueRequest) {
       milestone: payload.milestone ?? null,
 
       number,
-      status: payload.status || project.defaultIssueStatus || "tracker:status:Backlog",
+      status:
+        payload.status ??
+        project.defaultIssueStatus ??
+        "tracker:status:Backlog",
+
       priority: payload.priority ?? 0,
 
       rank: "",
@@ -107,13 +145,16 @@ export async function createIssue(payload: CreateIssueRequest) {
       childInfo: [],
 
       kind: issueType._id,
-      identifier
+      identifier,
     };
 
     let result: any;
 
     if (typeof client.apply === "function") {
-      const operations = client.apply(undefined, "tracker.createIssue");
+      const operations = client.apply(
+        undefined,
+        "tracker.createIssue"
+      );
 
       await operations.addCollection(
         tracker.class.Issue,
@@ -126,7 +167,9 @@ export async function createIssue(payload: CreateIssueRequest) {
       );
 
       result = await operations.commit();
-    } else if (typeof client.addCollection === "function") {
+    } else if (
+      typeof client.addCollection === "function"
+    ) {
       result = await client.addCollection(
         tracker.class.Issue,
         project._id,
@@ -137,13 +180,8 @@ export async function createIssue(payload: CreateIssueRequest) {
         issueId
       );
     } else {
-      const methods = [
-        ...Object.keys(client),
-        ...Object.getOwnPropertyNames(Object.getPrototypeOf(client))
-      ];
-
       throw new Error(
-        `No supported Huly issue creation method found. Available client methods: ${methods.join(", ")}`
+        "No supported Huly issue creation method found"
       );
     }
 
@@ -153,7 +191,7 @@ export async function createIssue(payload: CreateIssueRequest) {
       identifier,
       title: issueData.title,
       projectId: project._id,
-      result
+      result,
     };
   } finally {
     await closeClient(client);

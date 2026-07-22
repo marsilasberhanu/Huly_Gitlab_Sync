@@ -13,6 +13,7 @@ from app.routers import (
     huly_webhooks,
     mappings,
     polling,
+    project_links,
 )
 
 from app.services.huly_polling_service import HulyPollingService
@@ -114,6 +115,7 @@ app = FastAPI(
 
 app.include_router(auth.router)
 app.include_router(connections.router)
+app.include_router(project_links.router)
 app.include_router(general.router)
 app.include_router(mappings.router)
 app.include_router(polling.router)

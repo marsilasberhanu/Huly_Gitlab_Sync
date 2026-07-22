@@ -59,3 +59,18 @@ def serialize_mapping(
         "huly_identifier": mapping.huly_identifier,
         "created_at": str(mapping.created_at),
     }
+
+def find_mapping_by_gitlab_for_link(
+    db: Session,
+    *,
+    project_link_id: int,
+    gitlab_issue_id: int,
+) -> IssueMapping | None:
+    return (
+        db.query(IssueMapping)
+        .filter(
+            IssueMapping.project_link_id == project_link_id,
+            IssueMapping.gitlab_issue_id == gitlab_issue_id,
+        )
+        .first()
+    )
