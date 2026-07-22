@@ -32,6 +32,7 @@ services:
       HULY_PROJECT_ID: ${HULY_PROJECT_ID}
       HULY_POLL_INTERVAL_SECONDS: 10
       HULY_ADAPTER_URL: http://huly-adapter:3001
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
@@ -58,6 +59,9 @@ services:
       HULY_PROJECT_ID: ${HULY_PROJECT_ID}
       ENABLE_HULY_POLLER: ${ENABLE_HULY_POLLER}
       HULY_POLL_INTERVAL_SECONDS: 10
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      - "huly.local:host-gateway"
 
 volumes:
   postgres_data:
