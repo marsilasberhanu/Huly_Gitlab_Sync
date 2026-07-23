@@ -14,6 +14,12 @@ from app.services.connected_account_service import (
 
 
 def hash_webhook_secret(secret: str) -> str:
+    """
+    Convert the plain GitLab webhook secret into a SHA-256 hash.
+
+    The plain secret is returned once when the project link is created.
+    Only the hash is stored in the database.
+    """
     return hashlib.sha256(
         secret.encode("utf-8")
     ).hexdigest()
@@ -23,7 +29,15 @@ def verify_webhook_secret(
     provided_secret: str,
     expected_hash: str,
 ) -> bool:
-    provided_hash = hash_webhook_secret(provided_secret)
+    """
+    Verify a plain webhook secret against the stored SHA-256 hash.
+    """
+    if not provided_secret or not expected_hash:
+        return False
+
+    provided_hash = hash_webhook_secret(
+        provided_secret
+    )
 
     return hmac.compare_digest(
         provided_hash,
@@ -37,12 +51,21 @@ def create_project_link(
     user_id: int,
     data: ProjectLinkCreate,
 ) -> tuple[ProjectLink, str]:
-    # A project link is useless unless both accounts exist.
+    """
+    Create a GitLab-to-Huly project link.
+
+    Returns:
+        The ProjectLink database record.
+        The plain webhook secret, returned only once.
+    """
+
+    # Ensure this user connected both required accounts.
     get_connected_account(
         db,
         user_id=user_id,
         provider="gitlab",
     )
+
     get_connected_account(
         db,
         user_id=user_id,
@@ -68,6 +91,7 @@ def create_project_link(
     try:
         db.commit()
         db.refresh(link)
+
         return link, raw_secret
 
     except IntegrityError as exc:
@@ -93,7 +117,9 @@ def list_project_links(
 ) -> list[ProjectLink]:
     return (
         db.query(ProjectLink)
-        .filter(ProjectLink.user_id == user_id)
+        .filter(
+            ProjectLink.user_id == user_id
+        )
         .order_by(ProjectLink.id.asc())
         .all()
     )
@@ -104,6 +130,12 @@ def get_project_link(
     *,
     project_link_id: int,
 ) -> ProjectLink:
+    """
+    Load an active project link for an incoming webhook.
+
+    Webhook authentication is performed separately using the
+    webhook secret.
+    """
     link = (
         db.query(ProjectLink)
         .filter(
@@ -116,7 +148,7 @@ def get_project_link(
     if link is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project link was not found.",
+            detail="Active project link was not found.",
         )
 
     return link
@@ -128,6 +160,9 @@ def get_user_project_link(
     user_id: int,
     project_link_id: int,
 ) -> ProjectLink:
+    """
+    Load a project link that belongs to a specific authenticated user.
+    """
     link = (
         db.query(ProjectLink)
         .filter(
@@ -161,6 +196,7 @@ def delete_project_link(
     try:
         db.delete(link)
         db.commit()
+
     except Exception:
         db.rollback()
         raise

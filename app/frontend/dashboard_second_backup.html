@@ -416,7 +416,7 @@
         <div class="demo-steps">
           <div class="step"><div class="step-num">1</div><div class="step-text">Log in to the sync engine.</div></div>
           <div class="step"><div class="step-num">2</div><div class="step-text">Show GitLab and Huly are connected.</div></div>
-          <div class="step"><div class="step-num">3</div><div class="step-text">Show the project link and its unique webhook URL ending with the mapping number.</div></div>
+          <div class="step"><div class="step-num">3</div><div class="step-text">Show the project link and webhook URL.</div></div>
           <div class="step"><div class="step-num">4</div><div class="step-text">Create a GitLab issue and show it in Huly.</div></div>
           <div class="step"><div class="step-num">5</div><div class="step-text">Show the saved issue mapping and duplicate protection.</div></div>
         </div>
@@ -532,7 +532,7 @@
         <div class="card-header">
           <div>
             <h2>Create project link</h2>
-            <p>Maps one GitLab project to one Huly project and generates a unique webhook URL using the new mapping number.</p>
+            <p>Maps one GitLab project to one Huly project.</p>
           </div>
         </div>
         <form id="projectLinkForm" class="form-grid">
@@ -558,8 +558,6 @@
         </form>
         <div id="secretBox" class="secret-box">
           <strong>Save these values now. The secret is shown only once.</strong>
-          <div class="subtitle" style="margin-top:10px;">Project link / mapping number</div>
-          <div id="createdMappingId" class="mono"></div>
           <div class="subtitle" style="margin-top:10px;">Webhook URL</div>
           <div id="createdWebhookUrl" class="mono"></div>
           <div class="subtitle" style="margin-top:10px;">Webhook secret</div>
@@ -767,26 +765,21 @@
         const links = await api("/project-links");
         $("linkCount").textContent = links.length;
         $("linksList").innerHTML = links.length
-          ? links.map((link) => {
-              const mappingId = link.project_link_id ?? link.mapping_id ?? link.id;
-              const webhookUrl = buildWebhookUrl(link, mappingId);
-
-              return `
-                <div class="list-item">
-                  <div>
-                    <div class="list-title">
-                      ${escapeHtml(link.gitlab_project_name || String(link.gitlab_project_id))}
-                      → ${escapeHtml(link.huly_project_name || link.huly_project_id)}
-                    </div>
-                    <div class="list-meta">
-                      Mapping #${escapeHtml(mappingId)} · GitLab ${escapeHtml(link.gitlab_project_id)} · Huly ${escapeHtml(link.huly_project_id)}
-                    </div>
-                    <div class="list-meta">${escapeHtml(webhookUrl)}</div>
+          ? links.map((link) => `
+              <div class="list-item">
+                <div>
+                  <div class="list-title">
+                    ${escapeHtml(link.gitlab_project_name || String(link.gitlab_project_id))}
+                    → ${escapeHtml(link.huly_project_name || link.huly_project_id)}
                   </div>
-                  <button class="danger" onclick="deleteLink(${link.id})">Delete</button>
+                  <div class="list-meta">
+                    Link #${link.id} · GitLab ${link.gitlab_project_id} · Huly ${escapeHtml(link.huly_project_id)}
+                  </div>
+                  <div class="list-meta">${escapeHtml(link.webhook_url)}</div>
                 </div>
-              `;
-            }).join("")
+                <button class="danger" onclick="deleteLink(${link.id})">Delete</button>
+              </div>
+            `).join("")
           : `<div class="empty">No project links yet.</div>`;
         log("Project links loaded", links);
       } catch (error) {
@@ -830,36 +823,6 @@
         toast(error.message);
         log("Failed to delete project link", error.message);
       }
-    }
-
-    function buildWebhookUrl(source, mappingId) {
-      if (mappingId === undefined || mappingId === null || mappingId === "") {
-        return String(source?.webhook_url || "").trim();
-      }
-
-      const encodedMappingId = encodeURIComponent(String(mappingId));
-      const returnedUrl = String(source?.webhook_url || "").trim();
-
-      if (!returnedUrl) {
-        return `${window.location.origin}/webhook/gitlab/${encodedMappingId}`;
-      }
-
-      const withPlaceholderReplaced = returnedUrl
-        .replace("{project_link_id}", encodedMappingId)
-        .replace("{mapping_id}", encodedMappingId)
-        .replace("{project_link_id}", encodedMappingId);
-
-      const normalized = withPlaceholderReplaced.replace(/\/+$/, "");
-
-      if (normalized.endsWith(`/${encodedMappingId}`)) {
-        return normalized;
-      }
-
-      if (normalized.endsWith("/webhook/gitlab")) {
-        return `${normalized}/${encodedMappingId}`;
-      }
-
-      return normalized;
     }
 
     function escapeHtml(value) {
@@ -948,22 +911,13 @@
           }),
         });
 
-        const mappingId = result.project_link_id ?? result.mapping_id ?? result.id;
-
-        if (mappingId === undefined || mappingId === null || mappingId === "") {
-          throw new Error("Backend did not return a project link/mapping number.");
-        }
-
-        const webhookUrl = buildWebhookUrl(result, mappingId);
-
         $("secretBox").style.display = "block";
-        $("createdMappingId").textContent = mappingId;
-        $("createdWebhookUrl").textContent = webhookUrl;
-        $("createdWebhookSecret").textContent = result.webhook_secret || "Not returned by backend";
-        toast("Project link and unique webhook created");
-        log("Project link created. The webhook URL now includes the mapping number.", {
-          mapping_id: mappingId,
-          webhook_url: webhookUrl,
+        $("createdWebhookUrl").textContent = result.webhook_url;
+        $("createdWebhookSecret").textContent = result.webhook_secret;
+        toast("Project link created");
+        log("Project link created. Save the one-time secret.", {
+          id: result.id,
+          webhook_url: result.webhook_url,
         });
         await loadLinks();
       } catch (error) {

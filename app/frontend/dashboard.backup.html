@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GitLab ↔ Huly Sync Dashboard</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      font-family: Arial, sans-serif;
+    }
+
+    body {
+      margin: 0;
+      background: #0f172a;
+      color: #e5e7eb;
+    }
+
+    header {
+      padding: 24px;
+      background: #020617;
+      border-bottom: 1px solid #1e293b;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 26px;
+    }
+
+    header p {
+      margin: 8px 0 0;
+      color: #94a3b8;
+    }
+
+    main {
+      padding: 24px;
+      max-width: 1200px;
+      margin: auto;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .card {
+      background: #111827;
+      border: 1px solid #1f2937;
+      border-radius: 12px;
+      padding: 18px;
+      box-shadow: 0 10px 20px rgba(0,0,0,0.25);
+    }
+
+    .card h3 {
+      margin-top: 0;
+      color: #cbd5e1;
+      font-size: 15px;
+    }
+
+    .value {
+      font-size: 28px;
+      font-weight: bold;
+      margin-top: 8px;
+    }
+
+    .ok {
+      color: #22c55e;
+    }
+
+    .bad {
+      color: #ef4444;
+    }
+
+    .warn {
+      color: #f59e0b;
+    }
+
+    button {
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 14px;
+      cursor: pointer;
+      font-weight: bold;
+      margin-right: 8px;
+      margin-bottom: 8px;
+    }
+
+    button:hover {
+      background: #1d4ed8;
+    }
+
+    button.secondary {
+      background: #334155;
+    }
+
+    button.secondary:hover {
+      background: #475569;
+    }
+
+    button.danger {
+      background: #dc2626;
+    }
+
+    button.danger:hover {
+      background: #b91c1c;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 14px;
+    }
+
+    th, td {
+      padding: 10px;
+      border-bottom: 1px solid #1f2937;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: #93c5fd;
+      background: #020617;
+      position: sticky;
+      top: 0;
+    }
+
+    tr:hover {
+      background: #1e293b;
+    }
+
+    a {
+      color: #60a5fa;
+      text-decoration: none;
+    }
+
+    .small {
+      font-size: 12px;
+      color: #94a3b8;
+    }
+
+    .log-box {
+      background: #020617;
+      border: 1px solid #1e293b;
+      border-radius: 10px;
+      padding: 12px;
+      height: 180px;
+      overflow: auto;
+      white-space: pre-wrap;
+      font-family: monospace;
+      font-size: 13px;
+      color: #cbd5e1;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: bold;
+    }
+
+    .badge.green {
+      background: rgba(34,197,94,0.15);
+      color: #22c55e;
+    }
+
+    .badge.blue {
+      background: rgba(37,99,235,0.2);
+      color: #60a5fa;
+    }
+
+    .badge.gray {
+      background: rgba(148,163,184,0.15);
+      color: #cbd5e1;
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <h1>GitLab ↔ Huly Sync Dashboard</h1>
+    <p>Live status page for your synchronization engine</p>
+  </header>
+
+  <main>
+    <div class="grid">
+      <div class="card">
+        <h3>Poller Task</h3>
+        <div id="taskStatus" class="value warn">Loading...</div>
+        <div class="small">Background Huly polling task</div>
+      </div>
+
+      <div class="card">
+        <h3>Initial Snapshot</h3>
+        <div id="initializedStatus" class="value warn">Loading...</div>
+        <div class="small">Protects old issues from duplicate sync</div>
+      </div>
+
+      <div class="card">
+        <h3>Known Huly Issues</h3>
+        <div id="knownIssues" class="value">0</div>
+        <div class="small">Issues currently tracked by poller</div>
+      </div>
+
+      <div class="card">
+        <h3>Total Mappings</h3>
+        <div id="mappingCount" class="value">0</div>
+        <div class="small">Linked GitLab ↔ Huly issues</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Actions</h3>
+
+      <button onclick="refreshAll()">Refresh Dashboard</button>
+      <button class="secondary" onclick="manualPoll()">Manual Poll Huly</button>
+      <button class="secondary" onclick="testFakeHulyWebhook()">Fake Huly → GitLab Test</button>
+
+      <p class="small">
+        Real test: create an issue inside Huly UI, wait 10 seconds, then refresh this dashboard.
+      </p>
+    </div>
+
+    <br />
+
+    <div class="card">
+      <h3>Sync Logs</h3>
+      <div id="logs" class="log-box">Dashboard started...</div>
+    </div>
+
+    <br />
+
+    <div class="card">
+      <h3>Latest Issue Mappings</h3>
+
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Huly</th>
+            <th>GitLab</th>
+            <th>Title</th>
+            <th>Created</th>
+          </tr>
+        </thead>
+        <tbody id="mappingsBody">
+          <tr>
+            <td colspan="5">Loading...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <script>
+    function log(message, data = null) {
+      const box = document.getElementById("logs");
+      const time = new Date().toLocaleTimeString();
+
+      let line = `[${time}] ${message}`;
+
+      if (data) {
+        line += "\n" + JSON.stringify(data, null, 2);
+      }
+
+      box.textContent = line + "\n\n" + box.textContent;
+    }
+
+    function setText(id, text, className = "") {
+      const el = document.getElementById(id);
+      el.textContent = text;
+      el.className = "value " + className;
+    }
+
+    async function loadPollerStatus() {
+      try {
+        const res = await fetch("/debug/poller");
+        const data = await res.json();
+
+        if (data.task_exists && !data.task_done && !data.task_cancelled) {
+          setText("taskStatus", "Running", "ok");
+        } else {
+          setText("taskStatus", "Problem", "bad");
+        }
+
+        if (data.initialized) {
+          setText("initializedStatus", "Ready", "ok");
+        } else {
+          setText("initializedStatus", "Not Ready", "warn");
+        }
+
+        setText("knownIssues", data.known_issues_count ?? 0);
+
+        log("Poller status refreshed", data);
+      } catch (err) {
+        setText("taskStatus", "Error", "bad");
+        log("Failed to load poller status", String(err));
+      }
+    }
+
+    async function loadMappings() {
+      try {
+        const res = await fetch("/mappings");
+        const data = await res.json();
+
+        const mappings = data.mappings || [];
+
+        setText("mappingCount", data.count ?? mappings.length);
+
+        const body = document.getElementById("mappingsBody");
+
+        if (mappings.length === 0) {
+          body.innerHTML = `<tr><td colspan="5">No mappings yet</td></tr>`;
+          return;
+        }
+
+        body.innerHTML = mappings.slice(0, 20).map(mapping => {
+          const gitlabUrl = mapping.gitlab_issue_url
+            ? `<a href="${mapping.gitlab_issue_url}" target="_blank">GitLab #${mapping.gitlab_issue_iid}</a>`
+            : `GitLab #${mapping.gitlab_issue_iid || "-"}`;
+
+          return `
+            <tr>
+              <td>${mapping.id}</td>
+
+              <td>
+                <span class="badge green">${mapping.huly_identifier || "Huly"}</span>
+                <div class="small">${mapping.huly_issue_id || "-"}</div>
+              </td>
+
+              <td>
+                <span class="badge blue">${gitlabUrl}</span>
+                <div class="small">${mapping.gitlab_issue_id || "-"}</div>
+              </td>
+
+              <td>${mapping.gitlab_title || "-"}</td>
+
+              <td>
+                <span class="badge gray">${mapping.created_at || "-"}</span>
+              </td>
+            </tr>
+          `;
+        }).join("");
+
+        log("Mappings refreshed", {
+          count: data.count
+        });
+
+      } catch (err) {
+        log("Failed to load mappings", String(err));
+      }
+    }
+
+    async function manualPoll() {
+      try {
+        log("Manual Huly poll started...");
+
+        const res = await fetch("/poll/huly");
+        const data = await res.json();
+
+        log("Manual Huly poll finished", data);
+
+        await refreshAll();
+      } catch (err) {
+        log("Manual Huly poll failed", String(err));
+      }
+    }
+
+    async function testFakeHulyWebhook() {
+      try {
+        const id = "frontend-test-" + Date.now();
+
+        const payload = {
+          eventType: "issue.created",
+          projectId: "6a5f3a1ae71459b02a3521f7",
+          id: id,
+          identifier: "TEST-FRONTEND",
+          title: "Frontend dashboard fake Huly test " + new Date().toLocaleTimeString(),
+          description: "Created from the frontend dashboard fake webhook test.",
+          url: "https://huly.app/workbench/testsandbox/tracker/6a5f3a1ae71459b02a3521f7/issues"
+        };
+
+        log("Sending fake Huly webhook...", payload);
+
+        const res = await fetch("/webhook/huly", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+
+        log("Fake Huly webhook result", data);
+
+        await refreshAll();
+
+      } catch (err) {
+        log("Fake Huly webhook failed", String(err));
+      }
+    }
+
+    async function refreshAll() {
+      await loadPollerStatus();
+      await loadMappings();
+    }
+
+    refreshAll();
+
+    setInterval(refreshAll, 10000);
+  </script>
+</body>
+</html>
