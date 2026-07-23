@@ -5,6 +5,9 @@ from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.services.sync_origin_service import (
+    has_huly_to_gitlab_marker,
+)
 from app.models.issue_mapping import IssueMapping
 from app.models.project_link import ProjectLink
 
@@ -139,7 +142,7 @@ async def sync_gitlab_issue_to_huly(
     )
 
     existing_mapping = (
-        db.query(IssueMapping)
+    db.query(IssueMapping)
         .filter(
             IssueMapping.project_link_id
             == project_link.id,
@@ -148,6 +151,39 @@ async def sync_gitlab_issue_to_huly(
         )
         .first()
     )
+
+    created_by_huly_sync = (
+        issue_action == "open"
+        and has_huly_to_gitlab_marker(
+            description=issue_description,
+            project_link_id=project_link.id,
+        )
+    )
+
+    if created_by_huly_sync:
+        print(
+            "🔁 Ignoring reflected GitLab creation webhook:",
+            f"project_link_id={project_link.id}",
+            f"gitlab_issue_id={issue_id}",
+            flush=True,
+        )
+
+        return {
+            "status": "ignored_echo",
+            "reason": (
+                "This GitLab issue was created by the "
+                "Huly-to-GitLab synchronization."
+            ),
+            "project_link_id": project_link.id,
+            "mapping_id": (
+                existing_mapping.id
+                if existing_mapping is not None
+                else None
+            ),
+            "gitlab_issue_id": issue_id,
+        }
+
+    
 
     if existing_mapping is not None:
         print(

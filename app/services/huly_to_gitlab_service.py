@@ -4,7 +4,10 @@ import httpx
 
 from app.database import SessionLocal
 from app.models.issue_mapping import IssueMapping
-from app.services.mapping_service import find_mapping_by_huly
+from app.models.project_link import ProjectLink
+from app.services.sync_origin_service import (
+    build_huly_to_gitlab_marker,
+)
 
 
 GITLAB_API_TOKEN = os.getenv("GITLAB_API_TOKEN")
@@ -127,15 +130,7 @@ async def sync_huly_issue_to_gitlab(
             ),
         }
 
-    if not GITLAB_DEFAULT_PROJECT_ID:
-        return {
-            "status": "failed",
-            "reason": (
-                "GITLAB_DEFAULT_PROJECT_ID or "
-                "GITLAB_PROJECT_ID is not configured"
-            ),
-        }
-
+    
     if not huly_project_id or not huly_issue_id:
         return {
             "status": "failed",
@@ -149,10 +144,61 @@ async def sync_huly_issue_to_gitlab(
     db = SessionLocal()
 
     try:
-        existing_mapping = find_mapping_by_huly(
-            db=db,
-            huly_project_id=str(huly_project_id),
-            huly_issue_id=str(huly_issue_id),
+        project_links = (
+            db.query(ProjectLink)
+            .filter(
+                ProjectLink.huly_project_id
+                == str(huly_project_id),
+                ProjectLink.is_active.is_(True),
+            )
+            .all()
+        )
+
+        if not project_links:
+            return {
+                "status": "failed",
+                "reason": (
+                    "No active project link was found "
+                    "for this Huly project."
+                ),
+                "huly_project_id": str(huly_project_id),
+            }
+
+        if len(project_links) > 1:
+            return {
+                "status": "failed",
+                "reason": (
+                    "More than one active project link uses "
+                    "this Huly project. The source account or "
+                    "workspace must be included to identify the "
+                    "correct link."
+                ),
+                "huly_project_id": str(huly_project_id),
+                "project_link_ids": [
+                    link.id
+                    for link in project_links
+                ],
+            }
+
+        project_link = project_links[0]
+
+        print(
+            "Project link selected:",
+            f"id={project_link.id}",
+            f"huly_project={project_link.huly_project_id}",
+            f"gitlab_project={project_link.gitlab_project_id}",
+            flush=True,
+        )
+
+        existing_mapping = (
+            db.query(IssueMapping)
+            .filter(
+                IssueMapping.project_link_id
+                == project_link.id,
+                IssueMapping.huly_issue_id
+                == str(huly_issue_id),
+            )
+            .first()
         )
 
         if existing_mapping:
@@ -191,26 +237,34 @@ async def sync_huly_issue_to_gitlab(
                 },
             }
 
+        sync_marker = build_huly_to_gitlab_marker(
+    project_link_id=project_link.id,
+    huly_issue_id=str(huly_issue_id),
+        )
+
         gitlab_description = f"""
-Created from Huly.
+        Created from Huly.
 
-Huly Project ID: {huly_project_id}
-Huly Issue ID: {huly_issue_id}
-Huly Identifier: {huly_identifier}
-Huly URL: {huly_url}
+        Project Link ID: {project_link.id}
+        Huly Project ID: {huly_project_id}
+        Huly Issue ID: {huly_issue_id}
+        Huly Identifier: {huly_identifier}
+        Huly URL: {huly_url}
 
-Original Huly Description:
-{huly_description}
-"""
+        Original Huly Description:
+        {huly_description}
+
+        {sync_marker}
+        """.strip()
 
         print(
             "🚀 Creating GitLab issue from Huly issue..."
         )
 
         gitlab_result = await create_gitlab_issue(
-            project_id=GITLAB_DEFAULT_PROJECT_ID,
-            title=huly_title,
-            description=gitlab_description,
+        project_id=project_link.gitlab_project_id,
+        title=huly_title,
+        description=gitlab_description,
         )
 
         print("✅ GitLab issue created")
@@ -218,7 +272,7 @@ Original Huly Description:
 
         gitlab_project_id = (
             gitlab_result.get("project_id")
-            or int(GITLAB_DEFAULT_PROJECT_ID)
+            or project_link.gitlab_project_id
         )
 
         gitlab_issue_id = gitlab_result.get("id")
@@ -234,17 +288,23 @@ Original Huly Description:
                 ),
                 "gitlab_response": gitlab_result,
             }
-
+        
         mapping = IssueMapping(
-            gitlab_project_id=gitlab_project_id,
-            gitlab_project_name=None,
-            gitlab_issue_id=gitlab_issue_id,
-            gitlab_issue_iid=gitlab_issue_iid,
-            gitlab_issue_url=gitlab_issue_url,
-            gitlab_title=huly_title,
-            huly_project_id=str(huly_project_id),
-            huly_issue_id=str(huly_issue_id),
-            huly_identifier=huly_identifier,
+        user_id=project_link.user_id,
+        project_link_id=project_link.id,
+
+        gitlab_project_id=gitlab_project_id,
+        gitlab_project_name=(
+            project_link.gitlab_project_name
+        ),
+        gitlab_issue_id=gitlab_issue_id,
+        gitlab_issue_iid=gitlab_issue_iid,
+        gitlab_issue_url=gitlab_issue_url,
+        gitlab_title=huly_title,
+
+        huly_project_id=project_link.huly_project_id,
+        huly_issue_id=str(huly_issue_id),
+        huly_identifier=huly_identifier,
         )
 
         db.add(mapping)
