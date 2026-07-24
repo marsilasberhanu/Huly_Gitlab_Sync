@@ -1,0 +1,67 @@
+services:
+  db:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_USER: mars
+      POSTGRES_PASSWORD: supersecret
+      POSTGRES_DB: huly_gitlab_sync
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mars -d huly_gitlab_sync"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    restart: always
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+    environment:
+      DATABASE_URL: postgresql://mars:supersecret@db:5432/huly_gitlab_sync
+      GITLAB_API_TOKEN: ${GITLAB_API_TOKEN}
+      GITLAB_BASE_URL: ${GITLAB_BASE_URL}
+      GITLAB_DEFAULT_PROJECT_ID: ${GITLAB_DEFAULT_PROJECT_ID}
+      ENABLE_HULY_POLLER: ${ENABLE_HULY_POLLER}
+      HULY_PROJECT_ID: ${HULY_PROJECT_ID}
+      HULY_POLL_INTERVAL_SECONDS: 10
+      HULY_ADAPTER_URL: http://huly-adapter:3001
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+    depends_on:
+      db:
+        condition: service_healthy
+      huly-adapter:
+        condition: service_started
+    command: sh -c "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 3000"
+
+  huly-adapter:
+    build:
+      context: ./huly-adapter
+    restart: always
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./huly-adapter:/app
+      - /app/node_modules
+    environment:
+      HULY_URL: ${HULY_URL}
+      HULY_TOKEN: ${HULY_API_TOKEN}
+      HULY_WORKSPACE_ID: ${HULY_WORKSPACE_ID}
+      HULY_PROJECT_ID: ${HULY_PROJECT_ID}
+      ENABLE_HULY_POLLER: ${ENABLE_HULY_POLLER}
+      HULY_POLL_INTERVAL_SECONDS: 10
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      - "huly.local:host-gateway"
+
+volumes:
+  postgres_data:
